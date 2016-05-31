@@ -27,7 +27,7 @@ def updatemap(qmap, word, docno):
         if docno in dmap:
             dmap[docno] += 1
         else:
-            dmap[docno] = 0
+            dmap[docno] = 1
     else:
         mydict = {docno : 1}
         qmap[word] = mydict
@@ -39,6 +39,7 @@ def extract(fname, corpus, out):
     fobj = open(fname, 'w')
 
     for si in streamcorpus.Chunk(path=corpus):
+        doctext = ""
         docno = si.doc_id
 
         ## get the tag-stripped text from 'clean_visible'
@@ -64,15 +65,16 @@ def extract(fname, corpus, out):
                 # Update the IR map
                 updatemap(qmap, word, docno)
 
-                sent = sent + " " + word
-            fobj.write(shrinkspace(sent).strip() + " ")
+                # Form sentences and doc and finally write
+                sent = sent + " " + word.strip()
+            doctext = doctext + " " + sent.strip()
+        fobj.write(shrinkspace(doctext) + " ")
 
     # Post processing
     fobj.close()
 
     tf_file = out + "/" + "TFmap.json"
-    df_file = out + "/" + "DFmap.sjon"
-    print tf_file
+    df_file = out + "/" + "DFmap.json"
     dump_tfmap(qmap, tf_file, 2)
     dump_dfmap(qmap, df_file)
 
@@ -84,10 +86,12 @@ def read():
 
         out = outpath + "/" + dirname
         os.makedirs(out)
-        fileout = 'data.txt'
+        fileout = out + "/" + 'data.txt'
 
-
+        print("Processing -> " + filename)
         extract(fileout, filename, out)
+
+
 
 
 
