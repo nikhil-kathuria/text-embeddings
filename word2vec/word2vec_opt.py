@@ -44,19 +44,24 @@ import tensorflow as tf
 
 from tensorflow.models.embedding import gen_word2vec as word2vec
 
+inpath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/27/data.txt"
+resultpath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/27/"
+savepath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/modelchkpt/"
+
+
 flags = tf.app.flags
 
-flags.DEFINE_string("save_path", 'wvecdata', "Directory to write the model.")
-flags.DEFINE_string("result_path", 'wvecdata', "Directory to write the model.")
+flags.DEFINE_string("save_path", savepath, "Directory to write the model.")
+flags.DEFINE_string("result_path", resultpath, "Directory to write the model.")
 flags.DEFINE_string(
-    "train_data", 'trec.txt',
+    "train_data", inpath,
     "Training data. E.g., unzipped file http://mattmahoney.net/dc/text8.zip.")
 flags.DEFINE_string(
     "eval_data", 'sam8.txt', "Analogy questions. "
     "https://word2vec.googlecode.com/svn/trunk/questions-words.txt.")
-flags.DEFINE_integer("embedding_size", 128, "The embedding dimension size.")
+flags.DEFINE_integer("embedding_size", 300, "The embedding dimension size.")
 flags.DEFINE_integer(
-    "epochs_to_train", 15,
+    "epochs_to_train", 30,
     "Number of epochs to train. Each epoch processes the training data once "
     "completely.")
 flags.DEFINE_float("learning_rate", 0.025, "Initial learning rate.")
@@ -129,9 +134,8 @@ class Options(object):
     # Where to write out summaries.
     self.save_path = FLAGS.save_path
 
-    # Eval options.
     # Where to write out summaries.
-    self.save_path = FLAGS.result_path
+    self.result_path = FLAGS.result_path
 
     # The text file for eval.
     self.eval_data = FLAGS.eval_data
@@ -153,15 +157,14 @@ class Word2Vec(object):
     #print(self._word2id['of'])
 
     self.save_vocab()
-    self.dump_vocab()
 
     # Evaluation not required
     # self.build_eval_graph()
     # self._read_analogies()
 
-  def dump_vocab(self):
+  def dump_vocab(self, path):
     vocab = dict(zip(self._id2word, range(len(self._id2word)) ))
-    with open('vocab.json', 'w') as outfile:
+    with open(os.path.join(path, "vocab.json"), 'w') as outfile:
         json.dump(vocab, indent=1, separators=(',', ': '), fp=outfile)
 
   def _read_analogies(self):
@@ -258,7 +261,7 @@ class Word2Vec(object):
   def save_vocab(self):
     """Save the vocabulary to a file so the model can be reloaded."""
     opts = self._options
-    with open(os.path.join(opts.save_path, "vocab.txt"), "w") as f:
+    with open(os.path.join(opts.result_path, "vocab.txt"), "w") as f:
       for i in xrange(opts.vocab_size):
         f.write("%s %d\n" % (tf.compat.as_text(opts.vocab_words[i]),
                              opts.vocab_counts[i]))
@@ -440,6 +443,7 @@ def main(_):
 
   with tf.Graph().as_default(), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as session:
     model = Word2Vec(opts, session)
+    model.dump_vocab(opts.result_path)
     for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
 
@@ -449,7 +453,7 @@ def main(_):
     model.saver.save(session, os.path.join(opts.save_path, "model.ckpt"),
                      global_step=model.step)
     embeddings = model._w_in.eval()
-    dumpvocab(embeddings, opts.save_path)
+    dumpvocab(embeddings, opts.result_path)
 
 
     if FLAGS.interactive:
