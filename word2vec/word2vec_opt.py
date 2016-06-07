@@ -159,7 +159,7 @@ class Word2Vec(object):
 
 
   def dump_word2idx(self, path):
-    with open(os.path.join(path, "word2idx_2.json"), 'w') as outfile:
+    with open(os.path.join(path, "word2idx.json"), 'w') as outfile:
         json.dump(self._word2id, indent=1, separators=(',', ': '), fp=outfile)
 
 
