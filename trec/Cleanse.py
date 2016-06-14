@@ -39,18 +39,31 @@ def removehtml(text):
 
 
 def emptypunctuations(text):
-    return re.sub('\s[;:`.!,"?_#$&%\'\-]+\s', ' ', text)
+    return re.sub('\s[;:`.!,"?_#$&%\'\-/]+\s', ' ', text)
+
+
+def onlypunc(text):
+    return re.sub('^[;:`.!,"?_#$&%\'\-/|<>(){}=@]+$', '', text)
+
+
+def endpunc(text):
+    return re.sub('[;:`.!,"?_#$&%\'\-/|<>(){}=@]+$', '', text)
+
+
+def startpunc(text):
+    return re.sub('^[;:`.!,"?_#$&%\'\-/|<>(){}=@]+', '', text)
 
 
 def exceptwords(text):
     return re.sub('[^\w]', ' ',text)
 
+
 def shrinksapce(text):
     return re.sub('\s', ' ', text)
 
+
 def remove_(text):
     return re.sub('[_]', ' ', text)
-
 
 
 def all(text):
@@ -68,5 +81,7 @@ if __name__ == '__main__':
     print replacepath("/var/www/web_smashits/libs/db.php line Warning")
     print replacepath('hello \var\dump\ whynot')
     print exceptwords("news desk, sri lanka. oct 29, colombo: b")
-    print emptypunctuations("territories - andaman ")
+    print emptypunctuations("territories -- andaman ... a ")
+    print onlypunc(" -- ")
+    print endpunc("asd'';")
     print shrinkspace("  as     asd14 45554=-asd 12 4 5")

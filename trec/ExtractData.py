@@ -82,12 +82,24 @@ def extract(fname, corpus, out):
             sent = ""
             for x in s.tokens:
                 wcount +=1
-                # word = replaceurl(onlyenglish(x.token)).lower()
-                word = replaceurl(replacemail(x.token))
-                word = remove_(exceptwords(word)).lower()
 
-                # Update the IR map
-                updatemap(qmap, word, docno)
+                word = onlyenglish(replacemail(x.token)).lower()
+                word = onlypunc(endpunc(word)).strip()
+                # word = replaceurl(replacemail(x.token))
+                # word = remove_(exceptwords(word)).lower()
+
+                if word == "" or re.match('\s+', word):
+                    continue
+
+                spl = word.split('\s+')
+                if len(spl) > 1:
+                    for itr in range(len(spl)):
+                        updatemap(qmap, spl[itr], docno)
+                    word = ' '.join(spl)
+                    print(word)
+
+                else:
+                    updatemap(qmap, word, docno)
 
                 # Form sentences and doc and finally write
                 sent = sent + " " + word.strip()
@@ -95,8 +107,6 @@ def extract(fname, corpus, out):
         fobj.write(shrinkspace(doctext) + " ")
 
     # Post processing
-    fobj.close()
-
     tf_file = out + "/" + "TFmap.json"
     df_file = out + "/" + "DFmap.json"
     dump_tfmap(qmap, tf_file, 2)
