@@ -6,8 +6,8 @@ import os
 import streamcorpus
 from Cleanse import *
 
-inpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec"
-outpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data"
+inpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/"
+outpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/"
 
 
 
@@ -33,7 +33,28 @@ def updatemap(qmap, word, docno):
         qmap[word] = mydict
 
 
+def writeStat(stats, out):
+    wcount = stats[0]
+    scount = stats[1]
+    dcount = stats[2]
+
+    fobj = open(out + "/" + "stats.txt", 'w')
+
+    Docstr = "Documents: " + str(dcount)
+    Sentstr = "Sentences: " + str(scount) + " (" + str(float(scount) / dcount) + "/doc)"
+    Wordstr = "Words: " + str(wcount) + " (" + str(float(wcount) / scount) + "/sent)"
+
+    # Write and Close the file
+    fobj.write(Docstr + "\n")
+    fobj.write(Sentstr + "\n")
+    fobj.write(Wordstr + "\n")
+    fobj.close()
+
+
 def extract(fname, corpus, out):
+    dcount = 0
+    scount = 0
+    wcount = 0
     qmap = dict()
 
     fobj = open(fname, 'w')
@@ -41,6 +62,7 @@ def extract(fname, corpus, out):
     for si in streamcorpus.Chunk(path=corpus):
         doctext = ""
         docno = si.doc_id
+        dcount += 1
 
         ## get the tag-stripped text from 'clean_visible'
         if si.body.clean_visible is None:
@@ -56,8 +78,10 @@ def extract(fname, corpus, out):
         # One entry per sentence. Could concatenate further if desired.
         # sentencesa = [" ".join([x.token for x in s.tokens]) for s in sentences]
         for s in sentences:
+            scount += 1
             sent = ""
             for x in s.tokens:
+                wcount +=1
                 # word = replaceurl(onlyenglish(x.token)).lower()
                 word = replaceurl(replacemail(x.token))
                 word = remove_(exceptwords(word)).lower()
@@ -78,9 +102,10 @@ def extract(fname, corpus, out):
     dump_tfmap(qmap, tf_file, 2)
     dump_dfmap(qmap, df_file)
 
+    return (wcount, scount, dcount)
 
 def read():
-    for filename in glob(inpath + '/*'):
+    for filename in glob(inpath + '/27.*'):
         spa = filename.split('/')
         dirname = spa[len(spa) - 1].split('.')[0]
 
@@ -89,8 +114,9 @@ def read():
         fileout = out + "/" + 'data.txt'
 
         print("Processing -> " + filename)
-        extract(fileout, filename, out)
+        stats = extract(fileout, filename, out)
 
+        writeStat(stats, out)
 
 
 
