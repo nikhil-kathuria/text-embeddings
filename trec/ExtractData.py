@@ -6,8 +6,8 @@ import os
 import streamcorpus
 from Cleanse import *
 
-inpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/"
-outpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/"
+inpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data"
+outpath="/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data"
 
 
 
@@ -104,15 +104,17 @@ def extract(fname, corpus, out):
 
     return (wcount, scount, dcount)
 
+
 def read():
-    for filename in glob(inpath + '/27.*'):
+    for filename in glob(inpath + '/' + '*.xz'):
         spa = filename.split('/')
         dirname = spa[len(spa) - 1].split('.')[0]
 
         out = outpath + "/" + dirname
-        os.makedirs(out)
-        fileout = out + "/" + 'data.txt'
+        if not os.path.isdir(out):
+            os.makedirs(out)
 
+        fileout = out + "/" + 'data.txt'
         print("Processing -> " + filename)
         stats = extract(fileout, filename, out)
 
