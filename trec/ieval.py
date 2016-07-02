@@ -3,7 +3,7 @@ import numpy as np
 import sys
 from scipy.spatial.distance import cosine
 from gensim.models import Word2Vec
-from colorama import Fore
+from colorama import Fore, Back, Style
 from IPython import embed
 
 
@@ -25,7 +25,7 @@ def make_idx2word(word2idx):
 
 # Declare Global Static variables first
 gpath = '/gss_gpfs_scratch/kathuria.n/data/google_news/'
-myembed = loadmat('embedding.txt')
+myembed = loadmat('embeddings.txt')
 word2idx = load_word2idx('word2idx.json')
 idx2word = make_idx2word(word2idx)
 wv=Word2Vec.load_word2vec_format(gpath + 'GoogleNews-vectors-negative300.bin', binary=True)
@@ -90,7 +90,7 @@ def tcosine(word, topk=100):
 def compare(word, topk=100):
     # Check for words presence in google news corpus
     try:
-        gsim = wv.most_similar(positive=[word], topk=100)
+        gsim = wv.most_similar(positive=[word], topn=topk)
     except KeyError:
         print "Word %s is not present in Google News" % sys.exc_value
         return
@@ -105,26 +105,31 @@ def compare(word, topk=100):
 
     for itr in range(topn):
         gmap[str(gsim[itr][0])] = gsim[itr][1]
-        mymap[str(mysim[itr][0])] = mysim[itr][1]
+        mymap[str(idx2word[mysim[itr][0]])] = mysim[itr][1]
+
 
 
     for itr in range(topn):
         gword = str(gsim[itr][0])
-        mword = str(mysim[itr][0])
+        mword = str(idx2word[mysim[itr][0]])
 
         if gword in mymap:
-            part1 = (Fore.GREEN + gword + " " + str(gsim[itr][1]))
+            part1 = (Fore.GREEN + gword + " " + str(gmap[gword]))
         else:
-            part1 = (Fore.RED + gword + " " + str(gsim[itr][1]))
+            part1 = (Fore.RED + gword + " " + str(gmap[gword]))
 
         if mword in gmap:
-            part2 = (Fore.GREEN + gword + " " + str(mysim[itr][1]))
+            part2 = (Fore.GREEN + mword + " " + str(mymap[mword]))
         else:
-            part2 = (Fore.RED + gword + " " + str(mysim[itr][1]))
+            part2 = (Fore.RED + mword + " " + str(mymap[mword]))
 
         # Print the the combined line
-        print('\t' + part1 + '\t||\t' + part2 + '\t')
+        part1 = '{:75}'.format(part1)
+        part2 = '{:>75}'.format(part2)
+        print(part1 + "||" + part2)
 
+    Style.RESET_ALL
+    print("")
 
 if __name__ == '__main__':
     embed()
