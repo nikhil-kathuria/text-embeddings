@@ -48,6 +48,7 @@ from tensorflow.models.embedding import gen_word2vec as word2vec
 
 env = yaml.load(open('env.yaml'))['prod']
 
+
 flags = tf.app.flags
 
 flags.DEFINE_string("save_path", env['save_path'], "Directory to write the model.")
@@ -188,14 +189,12 @@ class Word2Vec(object):
 
     # Declare all variables we need.
     # Input words embedding: [vocab_size, emb_dim]
-    w_in = tf.Variable(
-        tf.random_uniform(
-            [opts.vocab_size,
-             opts.emb_dim], -0.5 / opts.emb_dim, 0.5 / opts.emb_dim),
-        name="w_in")
-
+    w_in = np.loadtxt(env['w_in'], dtype='float32')
+    w_in = tf.Variable(w_in, name="w_in")
     # Global step: scalar, i.e., shape [].
-    w_out = tf.Variable(tf.zeros([opts.vocab_size, opts.emb_dim]), name="w_out")
+
+    w_out = np.loadtxt(env['w_out'], dtype='float32')
+    w_out = tf.Variable(w_out, name="w_out")
 
     # Global step: []
     global_step = tf.Variable(0, name="global_step")
@@ -216,6 +215,7 @@ class Word2Vec(object):
                                  lr,
                                  vocab_count=opts.vocab_counts.tolist(),
                                  num_negative_samples=opts.num_samples)
+
 
     self._w_in = w_in
     self.w_out = w_out
@@ -278,7 +278,8 @@ class Word2Vec(object):
 
 
 def dump_embed(embeddings, name, path):
-  np.savetxt(os.path.join(path, name), embeddings, fmt='%10.8f')
+    np.savetxt(os.path.join(path, name), embeddings, fmt='%10.8f')
+
 
 def dump_env(path):
   with open(os.path.join(path, "env.yaml"), 'w') as outfile:
@@ -298,17 +299,10 @@ def main(_):
 
   with tf.Graph().as_default(), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as session:
     model = Word2Vec(opts, session)
-    model.dump_word2idx(opts.result_path)
+    #model.dump_word2idx(opts.result_path)
     for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
 
-    #print(model._train)
-    #print(type(model._train))
-    #exit()
-
-    # Do not eaval now
-    # model.eval()  # Eval analogies.
-    # Perform a final save.
     model.saver.save(session, os.path.join(opts.save_path, "model.ckpt"),
                      global_step=model.step)
 
