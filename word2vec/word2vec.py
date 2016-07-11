@@ -36,6 +36,9 @@ import os
 import sys
 import threading
 import time
+import json
+import yaml
+import timeit
 
 from six.moves import xrange  # pylint: disable=redefined-builtin
 
@@ -46,9 +49,10 @@ from tensorflow.models.embedding import gen_word2vec as word2vec
 
 flags = tf.app.flags
 
-flags.DEFINE_string("save_path", 'wvecdata', "Directory to write the model and "
+flags.DEFINE_string("save_path", 'wvecdata/logs', "Directory to write the model and "
                     "training summaries.")
-flags.DEFINE_string("train_data",'sam8.txt' , "Training text file. "
+flags.DEFINE_string("result_path",'wvecdata' , "Directory to write the model.")
+flags.DEFINE_string("train_data",'../trec/data/27/data.txt' , "Training text file. "
                     "E.g., unzipped file http://mattmahoney.net/dc/text8.zip.")
 flags.DEFINE_string(
     "eval_data", 'sam8.txt', "File consisting of analogies of four tokens."
@@ -57,16 +61,16 @@ flags.DEFINE_string(
     "E.g. https://word2vec.googlecode.com/svn/trunk/questions-words.txt.")
 flags.DEFINE_integer("embedding_size", 128, "The embedding dimension size.")
 flags.DEFINE_integer(
-    "epochs_to_train", 15,
+    "epochs_to_train", 5,
     "Number of epochs to train. Each epoch processes the training data once "
     "completely.")
-flags.DEFINE_float("learning_rate", 0.2, "Initial learning rate.")
-flags.DEFINE_integer("num_neg_samples", 100,
+flags.DEFINE_float("learning_rate", 0.1, "Initial learning rate.")
+flags.DEFINE_integer("num_neg_samples", 10,
                      "Negative samples per training example.")
 flags.DEFINE_integer("batch_size", 16,
                      "Number of training examples processed per step "
                      "(size of a minibatch).")
-flags.DEFINE_integer("concurrent_steps", 12,
+flags.DEFINE_integer("concurrent_steps", 16,
                      "The number of concurrent training steps.")
 flags.DEFINE_integer("window_size", 5,
                      "The number of words to predict to the left and right "
@@ -83,9 +87,9 @@ flags.DEFINE_boolean(
     "If true, enters an IPython interactive session to play with the trained "
     "model. E.g., try model.analogy(b'france', b'paris', b'russia') and "
     "model.nearby([b'proton', b'elephant', b'maxwell'])")
-flags.DEFINE_integer("statistics_interval", 5,
-                     "Print statistics every n seconds.")
-flags.DEFINE_integer("summary_interval", 5,
+flags.DEFINE_integer("statistics_interval", 100,
+                     "Print statistics every n epochs.")
+flags.DEFINE_integer("summary_interval", 1,
                      "Save training summary to file every n seconds (rounded "
                      "up to statistics interval).")
 flags.DEFINE_integer("checkpoint_interval", 600,
@@ -148,6 +152,9 @@ class Options(object):
     # Where to write out summaries.
     self.save_path = FLAGS.save_path
 
+    # Where to write out summaries.
+    self.result_path = FLAGS.result_path
+
     # Eval options.
     # The text file for eval.
     self.eval_data = FLAGS.eval_data
@@ -208,6 +215,7 @@ class Word2Vec(object):
     sm_w_t = tf.Variable(
         tf.zeros([opts.vocab_size, opts.emb_dim]),
         name="sm_w_t")
+    self._sm_w_t = sm_w_t
 
     # Softmax bias: [emb_dim].
     sm_b = tf.Variable(tf.zeros([opts.vocab_size]), name="sm_b")
@@ -282,6 +290,7 @@ class Word2Vec(object):
     lr = opts.learning_rate * tf.maximum(
         0.0001, 1.0 - tf.cast(self._words, tf.float32) / words_to_train)
     self._lr = lr
+    # tf.scalar_summary("Learning Rate", lr)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     train = optimizer.minimize(loss,
                                global_step=self.global_step,
@@ -391,38 +400,37 @@ class Word2Vec(object):
   def train(self):
     """Train the model."""
     opts = self._options
-
     initial_epoch, initial_words = self._session.run([self._epoch, self._words])
 
     summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter(opts.save_path, self._session.graph)
+    summary_writer = tf.train.SummaryWriter(opts.result_path, self._session.graph)
+
     workers = []
     for _ in xrange(opts.concurrent_steps):
       t = threading.Thread(target=self._train_thread_body)
       t.start()
       workers.append(t)
 
-    last_words, last_time, last_summary_time = initial_words, time.time(), 0
-    last_checkpoint_time = 0
+    last_words, last_time, prev_step = initial_words, time.time(), 0
     while True:
-      time.sleep(opts.statistics_interval)  # Reports our progress once a while.
       (epoch, step, loss, words, lr) = self._session.run(
-          [self._epoch, self.global_step, self._loss, self._words, self._lr])
-      now = time.time()
-      last_words, last_time, rate = words, now, (words - last_words) / (
+              [self._epoch, self.global_step, self._loss, self._words, self._lr])
+
+      if (step - prev_step) > opts.statistics_interval:
+        now = time.time()
+        last_words, last_time, rate = words, now, (words - last_words) / (
           now - last_time)
-      print("Epoch %4d Step %8d: lr = %5.3f loss = %6.2f words/sec = %8.0f\r" %
-            (epoch, step, lr, loss, rate), end="")
-      sys.stdout.flush()
-      if now - last_summary_time > opts.summary_interval:
+        print("Epoch %4d Step %8d: lr = %5.4f loss = %6.6f words/sec = %8.0f\r" %
+              (epoch, step, lr, loss, rate))
+        sys.stdout.flush()
+
         summary_str = self._session.run(summary_op)
         summary_writer.add_summary(summary_str, step)
-        last_summary_time = now
-      if now - last_checkpoint_time > opts.checkpoint_interval:
-        self.saver.save(self._session,
-                        os.path.join(opts.save_path, "model.ckpt"),
-                        global_step=step.astype(int))
-        last_checkpoint_time = now
+
+        # Update the last time and previous step
+        last_time = now
+        prev_step = step
+
       if epoch != initial_epoch:
         break
 
@@ -499,7 +507,12 @@ def _start_shell(local_ns=None):
   IPython.start_ipython(argv=[], user_ns=user_ns)
 
 
+def dump_embed(embeddings, name, path):
+  np.savetxt(os.path.join(path, name), embeddings, fmt='%10.8f')
+
+
 def main(_):
+  start = timeit.default_timer()
   """Train a word2vec model."""
   if not FLAGS.train_data or not FLAGS.eval_data or not FLAGS.save_path:
     print("--train_data --eval_data and --save_path must be specified.")
@@ -508,14 +521,21 @@ def main(_):
   with tf.Graph().as_default(), tf.Session() as session:
     model = Word2Vec(opts, session)
     for _ in xrange(opts.epochs_to_train):
-      print("epoch " + str(_))
       model.train()  # Process one epoch
+
       # model.eval()  # Eval analogies.
 
     # Perform a final save.
     model.saver.save(session,
                      os.path.join(opts.save_path, "model.ckpt"),
                      global_step=model.global_step)
+
+    embeddings = model._emb.eval()
+    out_embeddings = model._sm_w_t.eval()
+    dump_embed(embeddings, "embeddings.txt", opts.result_path)
+    dump_embed(out_embeddings, "out_embeddings.txt", opts.result_path)
+    end = timeit.default_timer()
+    print("Total time " + str((end - start) / 60) + " mins")
     if FLAGS.interactive:
       # E.g.,
       # [0]: model.analogy(b'france', b'paris', b'russia')

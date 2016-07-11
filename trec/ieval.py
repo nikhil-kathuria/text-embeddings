@@ -1,7 +1,7 @@
 import json
 import numpy as np
 import sys
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import cosine, cdist
 from gensim.models import Word2Vec
 from colorama import Fore, Back, Style
 from IPython import embed
@@ -46,14 +46,14 @@ def triplet(w1, w2, w3):
 
 # Function to get Top K similar from google news corpus
 def gcosine(word, topk):
-    similar = wv.most_similar(positive=["protest"],topn=100)
+    similar = wv.most_similar(positive=[word], topn=100)
 
     for tup in similar:
         print('\t' + str(tup[0][0]) + " " + str(tup[0][1]))
 
 
 # Generic function to compute cosine similarity for a word against corpus
-def cosine_compute(word, topk=100):
+def sim_compute(word, dis_type, topk=100):
     # Get the index of word and the corresponding vector
     try:
         index = word2idx[word]
@@ -63,22 +63,27 @@ def cosine_compute(word, topk=100):
         return
 
 
-    # Get the distance and delete the entry at index
-    cosdis = np.empty(len(myembed))
-    for itr in range(len(myembed)):
-        # Similarity = 1 - distance
-        cosdis[itr] = 1 - cosine(wordvec, myembed[itr:itr + 1])
 
-    zipped = zip(range(len(myembed)), cosdis)
+    # For cosine and correlation the similarity is 1 - distance
+    # Else for others just inverse the distance by  multipying with -1
+    if (dis_type == 'cosine' or dis_type == 'correlation' ):
+        sim = 1 - cdist(wordvec, myembed, dis_type)
+    else:
+        sim = -1 * cdist(wordvec, myembed, dis_type)
+
+    # Now operations to get sim the shape we need i.e from (1,N) to (N,)
+    final = sim[0].T
+
+    zipped = zip(range(len(final)), final)
     del zipped[index]
     zipped.sort(key=lambda t: t[1], reverse=True)
 
-    return  zipped
+    return zipped
 
 
 # Function to get Top K similar from our corpus
 def tcosine(word, topk=100):
-    zipped = cosine_compute(word, topk)
+    zipped = sim_compute(word, 'cosine', topk)
     topn = min(int(topk), len(zipped))
 
     print "Similarity order for " + word
@@ -87,7 +92,7 @@ def tcosine(word, topk=100):
 
 
 # Function to print the comparison of google vs our corpus result
-def compare(word, topk=100):
+def compare(word, dis_type='cosine', topk=100):
     # Check for words presence in google news corpus
     try:
         gsim = wv.most_similar(positive=[word], topn=topk)
@@ -96,7 +101,7 @@ def compare(word, topk=100):
         return
 
     # Check for words presence in our loaded corpus
-    mysim = cosine_compute(word, topk)
+    mysim = sim_compute(word, dis_type, topk)
 
     # Now compare and contrast
     topn = min(int(topk), len(mysim), len(gsim))
@@ -124,8 +129,8 @@ def compare(word, topk=100):
             part2 = (Fore.RED + mword + " " + str(mymap[mword]))
 
         # Print the the combined line
-        part1 = '{:75}'.format(part1)
-        part2 = '{:>75}'.format(part2)
+        part1 = '{:50}'.format(part1)
+        part2 = '{:>50}'.format(part2)
         print(part1 + "||" + part2)
 
     Style.RESET_ALL

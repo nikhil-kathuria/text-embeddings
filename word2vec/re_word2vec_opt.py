@@ -299,7 +299,7 @@ def main(_):
 
   with tf.Graph().as_default(), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as session:
     model = Word2Vec(opts, session)
-    #model.dump_word2idx(opts.result_path)
+    model.dump_word2idx(opts.result_path)
     for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
 
