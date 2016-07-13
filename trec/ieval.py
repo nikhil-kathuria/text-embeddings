@@ -57,7 +57,7 @@ def sim_compute(word, dis_type, topk=100):
     # Get the index of word and the corresponding vector
     try:
         index = word2idx[word]
-        wordvec = myembed[index, :]
+        wordvec = myembed[index, :].reshape(1,-1)
     except KeyError:
         print "Word %s is not present in Vocablury" % sys.exc_value
         return

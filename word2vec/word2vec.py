@@ -47,38 +47,40 @@ import tensorflow as tf
 
 from tensorflow.models.embedding import gen_word2vec as word2vec
 
+env = yaml.load(open('env.yaml'))['test']
+
 flags = tf.app.flags
 
-flags.DEFINE_string("save_path", 'wvecdata/logs', "Directory to write the model and "
+flags.DEFINE_string("save_path", env['save_path'], "Directory to write the model and "
                     "training summaries.")
-flags.DEFINE_string("result_path",'wvecdata' , "Directory to write the model.")
-flags.DEFINE_string("train_data",'../trec/data/27/data.txt' , "Training text file. "
+flags.DEFINE_string("result_path",env['result_path'] , "Directory to write the model.")
+flags.DEFINE_string("train_data",env['train_data'] , "Training text file. "
                     "E.g., unzipped file http://mattmahoney.net/dc/text8.zip.")
 flags.DEFINE_string(
-    "eval_data", 'sam8.txt', "File consisting of analogies of four tokens."
+    "eval_data", env['eval_data'], "File consisting of analogies of four tokens."
     "embedding 2 - embedding 1 + embedding 3 should be close "
     "to embedding 4."
     "E.g. https://word2vec.googlecode.com/svn/trunk/questions-words.txt.")
-flags.DEFINE_integer("embedding_size", 128, "The embedding dimension size.")
+flags.DEFINE_integer("embedding_size", env['embedding_size'], "The embedding dimension size.")
 flags.DEFINE_integer(
-    "epochs_to_train", 5,
+    "epochs_to_train", env['epochs'],
     "Number of epochs to train. Each epoch processes the training data once "
     "completely.")
-flags.DEFINE_float("learning_rate", 0.1, "Initial learning rate.")
-flags.DEFINE_integer("num_neg_samples", 10,
+flags.DEFINE_float("learning_rate", env['learning_rate'], "Initial learning rate.")
+flags.DEFINE_integer("num_neg_samples", env['negative_samples'],
                      "Negative samples per training example.")
-flags.DEFINE_integer("batch_size", 16,
+flags.DEFINE_integer("batch_size", env['batch_size'],
                      "Number of training examples processed per step "
                      "(size of a minibatch).")
-flags.DEFINE_integer("concurrent_steps", 16,
+flags.DEFINE_integer("concurrent_steps", env['concurrent_steps'],
                      "The number of concurrent training steps.")
-flags.DEFINE_integer("window_size", 5,
+flags.DEFINE_integer("window_size", env['window_size'],
                      "The number of words to predict to the left and right "
                      "of the target word.")
-flags.DEFINE_integer("min_count", 2,
+flags.DEFINE_integer("min_count", env['min_count'],
                      "The minimum number of word occurrences for it to be "
                      "included in the vocabulary.")
-flags.DEFINE_float("subsample", 1e-3,
+flags.DEFINE_float("subsample", env['sub_sample'],
                    "Subsample threshold for word occurrence. Words that appear "
                    "with higher frequency will be randomly down-sampled. Set "
                    "to 0 to disable.")
@@ -87,7 +89,7 @@ flags.DEFINE_boolean(
     "If true, enters an IPython interactive session to play with the trained "
     "model. E.g., try model.analogy(b'france', b'paris', b'russia') and "
     "model.nearby([b'proton', b'elephant', b'maxwell'])")
-flags.DEFINE_integer("statistics_interval", 100,
+flags.DEFINE_integer("statistics_interval", env['interval'],
                      "Print statistics every n epochs.")
 flags.DEFINE_integer("summary_interval", 1,
                      "Save training summary to file every n seconds (rounded "
@@ -169,7 +171,7 @@ class Word2Vec(object):
     self._word2id = {}
     self._id2word = []
     self.build_graph()
-    # self.build_eval_graph()
+    self.build_eval_graph()
     self.save_vocab()
     # self._read_analogies()
 
@@ -416,7 +418,7 @@ class Word2Vec(object):
       (epoch, step, loss, words, lr) = self._session.run(
               [self._epoch, self.global_step, self._loss, self._words, self._lr])
 
-      if (step - prev_step) > opts.statistics_interval:
+      if True: # (step - prev_step) > opts.statistics_interval
         now = time.time()
         last_words, last_time, rate = words, now, (words - last_words) / (
           now - last_time)
@@ -518,12 +520,18 @@ def main(_):
     print("--train_data --eval_data and --save_path must be specified.")
     sys.exit(1)
   opts = Options()
-  with tf.Graph().as_default(), tf.Session() as session:
+
+  # my_config to be passed as argument in tf.session(config=my_config)
+  my_config = tf.ConfigProto()
+  #my_config.log_device_placement=True
+  #my_config.allow_soft_placement=True
+
+  with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
     for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
 
-      # model.eval()  # Eval analogies.
+      #model.eval()  # Eval analogies.
 
     # Perform a final save.
     model.saver.save(session,
