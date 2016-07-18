@@ -47,7 +47,7 @@ import tensorflow as tf
 
 from tensorflow.models.embedding import gen_word2vec as word2vec
 
-env = yaml.load(open('env.yaml'))['test']
+env = yaml.load(open('env.yaml'))['dev']
 
 flags = tf.app.flags
 
@@ -176,15 +176,7 @@ class Word2Vec(object):
     self.build_graph()
     self.build_eval_graph()
     self.save_vocab()
-    self._evalwords = self.init_words()
-    self._topk  = dict.fromkeys(self._evalwords, None)
     # self._read_analogies()
-
-
-  def dump_word2idx(self, path):
-    with open(os.path.join(path, "word2idx.json"), 'w') as outfile:
-        json.dump(self._word2id, indent=1, separators=(',', ': '), fp=outfile)
-
 
   def _read_analogies(self):
     """Reads through the analogy question file.
@@ -500,7 +492,6 @@ class Word2Vec(object):
         return c
     return "unknown"
 
-
   def nearby(self, words, num=20):
     """Prints out nearby words given a list of words."""
     ids = np.array([self._word2id.get(x, 0) for x in words])
@@ -511,53 +502,6 @@ class Word2Vec(object):
       for (neighbor, distance) in zip(idx[i, :num], vals[i, :num]):
         print("%-20s %6.4f" % (self._id2word[neighbor], distance))
 
-
-  def similar_neighbor(self, old, new, index):
-    word = self._id2word[self._evalwords[index]]
-    for idx in range(len(old)):
-      if not old[idx] == new[idx]:
-        print("\n" + word + " Did not converge\n")
-        return False
-    # Return True
-    return True
-
-
-  def init_words(self):
-    fname = self._options.eval_data
-    fobj = open(fname, 'r')
-    words = []
-    for line in fobj:
-      words.extend(line.split())
-    fobj.close()
-
-    ids = np.array([self._word2id.get(x, 0) for x in words if x in self._word2id])
-    return ids
-
-
-
-  def eval_converge(self, num=10):
-    flag = False
-    vals, idx = self._session.run(
-            [self._nearby_val, self._nearby_idx], {self._nearby_word: self._evalwords})
-    for i in xrange(len(self._evalwords)):
-      new_neighbor = idx[i, :num]
-      distance = vals[i, :num]
-      old_neighbor = self._topk[self._evalwords[i]]
-
-      if old_neighbor is not None:
-        flag = self.similar_neighbor(old_neighbor, new_neighbor, i)
-        if not flag:
-          self._topk[self._evalwords[i]] = new_neighbor
-          return False
-      else:
-        print("\n First Epoch, no previous data for convergence \n")
-        self._topk[self._evalwords[i]] = new_neighbor
-        return False
-      # Update the nearest neighbors
-      self._topk[self._evalwords[i]] = new_neighbor
-
-    #Return flag
-    return True
 
 def _start_shell(local_ns=None):
   # An interactive shell is useful for debugging/development.
@@ -572,14 +516,22 @@ def _start_shell(local_ns=None):
 def dump_embed(embeddings, name, path):
   np.savetxt(os.path.join(path, name), embeddings, fmt='%10.8f')
 
+def create_dir(dirpath):
+  if not os.path.isdir(dirpath):
+    os.makedirs(FLAGS.dirpath)
+
 
 def main(_):
   start = timeit.default_timer()
   """Train a word2vec model."""
-  if not FLAGS.train_data or not FLAGS.eval_data or not FLAGS.save_path:
-    print("--train_data --eval_data and --save_path must be specified.")
+  if not FLAGS.train_data or not FLAGS.result_path or not FLAGS.save_path:
+    print("--train_data --result_path and --save_path must be specified.")
     sys.exit(1)
   opts = Options()
+
+  ## Create save and result directories
+  create_dir(FLAGS.save_path)
+  create_dir(FLAGS.result_path)
 
   # my_config to be passed as argument in tf.session(config=my_config)
   my_config = tf.ConfigProto()
@@ -588,19 +540,14 @@ def main(_):
 
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
-    while True:
-    # for _ in xrange(opts.epochs_to_train):
-      model.dump_word2idx(opts.result_path)
+    for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
-
       # Calculate and print the delta between avgloss
       newavg = sum(model._losslist) / len(model._losslist)
       delta = abs(newavg - model._avgloss)
       print("\nDELTA =====================================>>> %s\n" %delta)
-      if model.eval_converge():
-      #if delta < .01:
-        break
-      model._avgloss = newavg
+
+      model.avgloss = newavg
       model._losslist = []
 
       #model.eval()  # Eval analogies.
