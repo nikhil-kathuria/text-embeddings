@@ -178,6 +178,12 @@ class Word2Vec(object):
     self.save_vocab()
     # self._read_analogies()
 
+
+  def dump_word2idx(self, path):
+    with open(os.path.join(path, "word2idx.json"), 'w') as outfile:
+      json.dump(self._word2id, indent=1, separators=(',', ': '), fp=outfile)
+
+
   def _read_analogies(self):
     """Reads through the analogy question file.
 
@@ -390,7 +396,7 @@ class Word2Vec(object):
   def save_vocab(self):
     """Save the vocabulary to a file so the model can be reloaded."""
     opts = self._options
-    with open(os.path.join(opts.save_path, "vocab.txt"), "w") as f:
+    with open(os.path.join(opts.result_path, "vocab.txt"), "w") as f:
       for i in xrange(opts.vocab_size):
         f.write("%s %d\n" % (tf.compat.as_text(opts.vocab_words[i]),
                              opts.vocab_counts[i]))
@@ -408,7 +414,7 @@ class Word2Vec(object):
     initial_epoch, initial_words = self._session.run([self._epoch, self._words])
 
     summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter(opts.result_path, self._session.graph)
+    summary_writer = tf.train.SummaryWriter(opts.save_path, self._session.graph)
 
     workers = []
     for _ in xrange(opts.concurrent_steps):
@@ -540,6 +546,7 @@ def main(_):
 
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
+    model.dump_word2idx(opts.result_path)
     for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
       # Calculate and print the delta between avgloss

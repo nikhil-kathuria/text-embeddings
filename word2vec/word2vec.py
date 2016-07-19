@@ -588,9 +588,9 @@ def main(_):
 
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
+    model.dump_word2idx(opts.result_path)
     while True:
     # for _ in xrange(opts.epochs_to_train):
-      model.dump_word2idx(opts.result_path)
       model.train()  # Process one epoch
 
       # Calculate and print the delta between avgloss
