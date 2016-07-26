@@ -47,7 +47,7 @@ import tensorflow as tf
 
 from tensorflow.models.embedding import gen_word2vec as word2vec
 
-env = yaml.load(open('env.yaml'))['test']
+env = yaml.load(open('env.yaml'))['dev']
 
 flags = tf.app.flags
 
@@ -172,6 +172,7 @@ class Word2Vec(object):
     self._id2word = []
     self._avgloss = 0
     self._losslist = []
+    self._dlist = [0] * 4
 
     self.build_graph()
     self.build_eval_graph()
@@ -303,7 +304,7 @@ class Word2Vec(object):
     lr = opts.learning_rate * tf.maximum(
         0.0001, 1.0 - tf.cast(self._words, tf.float32) / words_to_train)
     self._lr = lr
-    tf.scalar_summary("Learning_Rate", lr)
+    tf.scalar_summary("Learning_Rate/" + str(self._epoch), lr)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     train = optimizer.minimize(loss,
                                global_step=self.global_step,
@@ -386,7 +387,7 @@ class Word2Vec(object):
       self._word2id[w] = i
     true_logits, sampled_logits = self.forward(examples, labels)
     loss = self.nce_loss(true_logits, sampled_logits)
-    tf.scalar_summary("NCE_loss", loss)
+    tf.scalar_summary("NCE_loss/" + str(self._epoch), loss)
     self._loss = loss
     self.optimize(loss)
 
@@ -415,8 +416,10 @@ class Word2Vec(object):
     opts = self._options
     initial_epoch, initial_words = self._session.run([self._epoch, self._words])
 
+
     summary_op = tf.merge_all_summaries()
     summary_writer = tf.train.SummaryWriter(opts.result_path, self._session.graph)
+
 
     workers = []
     for _ in xrange(opts.concurrent_steps):
@@ -512,14 +515,21 @@ class Word2Vec(object):
         print("%-20s %6.4f" % (self._id2word[neighbor], distance))
 
 
-  def similar_neighbor(self, old, new, index):
-    word = self._id2word[self._evalwords[index]]
-    for idx in range(len(old)):
-      if not old[idx] == new[idx]:
-        print("\n" + word + " Did not converge\n")
-        return False
-    # Return True
-    return True
+  def print_neigbhbor(self, neighbour, word):
+    neighbour = neighbour[1:]
+    words = " ".join(self._id2word[val] for val in neighbour)
+    print ("SIMWORDS " + word + " " + words)
+
+  def similar_neighbor(self, old, new, word):
+    flag = True
+    old_set = set(old)
+    new_set = set(new)
+    diff = old_set.symmetric_difference(new_set)
+    if len(diff) > 0:
+        print(word + " Did not converge")
+        flag = False
+    # Return Flag
+    return flag
 
 
   def init_words(self):
@@ -534,30 +544,53 @@ class Word2Vec(object):
     return ids
 
 
+  def delta_convergence(self, tolerance):
+    for itr in range(1, len(self._dlist)):
+      if abs(self._dlist[itr - 1] - self._dlist[itr]) > tolerance:
+        return False
+    return True
+
 
   def eval_converge(self, num=10):
-    flag = False
+    flag = True
     vals, idx = self._session.run(
             [self._nearby_val, self._nearby_idx], {self._nearby_word: self._evalwords})
+
     for i in xrange(len(self._evalwords)):
+      word = self._id2word[self._evalwords[i]]
       new_neighbor = idx[i, :num]
       distance = vals[i, :num]
       old_neighbor = self._topk[self._evalwords[i]]
+      self.print_neigbhbor(new_neighbor,word)
 
       if old_neighbor is not None:
-        flag = self.similar_neighbor(old_neighbor, new_neighbor, i)
-        if not flag:
-          self._topk[self._evalwords[i]] = new_neighbor
-          return False
+        result = self.similar_neighbor(old_neighbor, new_neighbor, word)
+        if not result:
+          flag = False
       else:
-        print("\n First Epoch, no previous data for convergence \n")
-        self._topk[self._evalwords[i]] = new_neighbor
-        return False
+        # print("\n First Epoch, no previous data for convergence \n")
+        flag = False
       # Update the nearest neighbors
       self._topk[self._evalwords[i]] = new_neighbor
 
     #Return flag
-    return True
+    return flag
+
+  def avg_loss(self):
+    # Calculate and print the delta between avgloss
+    newavg = sum(self._losslist) / len(self._losslist)
+    delta = abs(newavg - self._avgloss)
+    self._dlist.append(delta)
+    del self._dlist[0]
+    print("\nDELTA =====================================>>> %s\n" %delta)
+    self._avgloss = newavg
+    self._losslist = []
+
+    # tf.scalar_summary("Delta", delta)
+    # tf.scalar_summary("Avgloss", newavg)
+    # newavg_str = model._session.run(new_op)
+    # avg_loss_writer.add_summary(newavg_str, model.global_step.eval())
+
 
 def _start_shell(local_ns=None):
   # An interactive shell is useful for debugging/development.
@@ -589,21 +622,16 @@ def main(_):
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
     model.dump_word2idx(opts.result_path)
+    # avg_loss_writer = tf.train.SummaryWriter(opts.result_path, model._session.graph)
+
     while True:
     # for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
+      model.avg_loss()
 
-      # Calculate and print the delta between avgloss
-      newavg = sum(model._losslist) / len(model._losslist)
-      delta = abs(newavg - model._avgloss)
-      print("\nDELTA =====================================>>> %s\n" %delta)
-      if model.eval_converge():
-      #if delta < .01:
+      #if model.eval_converge():
+      if model.delta_convergence(.01):
         break
-      model._avgloss = newavg
-      model._losslist = []
-
-      #model.eval()  # Eval analogies.
     # Perform a final save.
     model.saver.save(session,
                      os.path.join(opts.save_path, "model.ckpt"),
