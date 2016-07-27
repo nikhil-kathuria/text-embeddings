@@ -522,10 +522,14 @@ def _start_shell(local_ns=None):
 def dump_embed(embeddings, name, path):
   np.savetxt(os.path.join(path, name), embeddings, fmt='%10.8f')
 
+
+def dump_env(path):
+  with open(os.path.join(path, "env.yaml"), 'w') as outfile:
+    outfile.write( yaml.dump(env, default_flow_style=False))
+
 def create_dir(dirpath):
   if not os.path.isdir(dirpath):
-    os.makedirs(FLAGS.dirpath)
-
+    os.makedirs(dirpath)
 
 def main(_):
   start = timeit.default_timer()
@@ -534,6 +538,8 @@ def main(_):
     print("--train_data --result_path and --save_path must be specified.")
     sys.exit(1)
   opts = Options()
+  # Dump env
+  dump_env(opts.result_path)
 
   ## Create save and result directories
   create_dir(FLAGS.save_path)
