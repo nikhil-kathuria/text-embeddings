@@ -522,9 +522,13 @@ class Word2Vec(object):
 
   def similar_neighbor(self, old, new, word):
     flag = True
+    # print(old)
+    # print(new)
     old_set = set(old)
     new_set = set(new)
     diff = old_set.symmetric_difference(new_set)
+    # print(old_set)
+    # print(new_set)
     if len(diff) > 0:
         print(word + " Did not converge")
         flag = False
@@ -551,7 +555,7 @@ class Word2Vec(object):
     return True
 
 
-  def eval_converge(self, num=10):
+  def eval_converge(self, num=20):
     flag = True
     vals, idx = self._session.run(
             [self._nearby_val, self._nearby_idx], {self._nearby_word: self._evalwords})
@@ -601,10 +605,16 @@ def _start_shell(local_ns=None):
   user_ns.update(globals())
   IPython.start_ipython(argv=[], user_ns=user_ns)
 
-
 def dump_embed(embeddings, name, path):
   np.savetxt(os.path.join(path, name), embeddings, fmt='%10.8f')
 
+def dump_env(path):
+  with open(os.path.join(path, "env.yaml"), 'w') as outfile:
+    outfile.write( yaml.dump(env, default_flow_style=False))
+
+def create_dir(dirpath):
+  if not os.path.isdir(dirpath):
+    os.makedirs(dirpath)
 
 def main(_):
   start = timeit.default_timer()
@@ -613,6 +623,12 @@ def main(_):
     print("--train_data --eval_data and --save_path must be specified.")
     sys.exit(1)
   opts = Options()
+
+  ## Dump env
+  dump_env(opts.save_path)
+  ## Create save and result directories
+  create_dir(FLAGS.save_path)
+  create_dir(FLAGS.result_path)
 
   # my_config to be passed as argument in tf.session(config=my_config)
   my_config = tf.ConfigProto()
@@ -629,8 +645,8 @@ def main(_):
       model.train()  # Process one epoch
       model.avg_loss()
 
-      #if model.eval_converge():
-      if model.delta_convergence(.01):
+      if model.eval_converge():
+      #if model.delta_convergence(.01):
         break
     # Perform a final save.
     model.saver.save(session,
