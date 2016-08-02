@@ -60,7 +60,6 @@ def extract(fname, corpus, out):
 
     for si in streamcorpus.Chunk(path=corpus):
         # print(si.body.clean_visible)
-        doctext = ""
         docno = si.doc_id
         dcount += 1
 
@@ -71,7 +70,7 @@ def extract(fname, corpus, out):
         scount += len(sentences)
 
         ## Get the tag-stripped text from 'clean_visible'
-        if si.body.clean_visible is None:
+        if si.body.clean_visible is None or si.body.clean_html is None:
             continue
 
         ## Parse the html via boilerpipe
