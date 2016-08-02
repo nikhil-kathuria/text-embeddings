@@ -60,7 +60,7 @@ def extract(fname, corpus, out):
     fobj = open(fname, 'w')
 
     for si in streamcorpus.Chunk(path=corpus):
-        print(si.body.clean_visible)
+        #print(si.body.clean_visible)
         doctext = ""
         docno = si.doc_id
         dcount += 1
@@ -106,7 +106,7 @@ def extract(fname, corpus, out):
                 # Form sentences and doc and finally write
                 sent = sent + " " + word.strip()
             doctext = doctext + " " + sent.strip()
-        #fobj.write(shrinkspace(doctext) + " ")
+        fobj.write(shrinkspace(doctext) + " ")
 
     # Post processing
     tf_file = out + "/" + "TFmap.json"

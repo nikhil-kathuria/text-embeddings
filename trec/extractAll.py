@@ -61,7 +61,7 @@ def mywrite(holder):
 
 
 if __name__ == '__main__':
-    obj = performextract("27.relonly.thrift.xz")
+    obj = performextract("./data/27.relonly.thrift.xz")
     mywrite(obj)
     # for key in obj.keys():
         # print str(key) + "->" +  str((obj[key]))
