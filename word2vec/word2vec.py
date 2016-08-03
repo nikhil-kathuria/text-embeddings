@@ -304,7 +304,7 @@ class Word2Vec(object):
     lr = opts.learning_rate * tf.maximum(
         0.0001, 1.0 - tf.cast(self._words, tf.float32) / words_to_train)
     self._lr = lr
-    tf.scalar_summary("Learning_Rate/" + str(self._epoch), lr)
+    tf.scalar_summary("Learning_Rate", lr)
     optimizer = tf.train.GradientDescentOptimizer(lr)
     train = optimizer.minimize(loss,
                                global_step=self.global_step,
@@ -387,7 +387,7 @@ class Word2Vec(object):
       self._word2id[w] = i
     true_logits, sampled_logits = self.forward(examples, labels)
     loss = self.nce_loss(true_logits, sampled_logits)
-    tf.scalar_summary("NCE_loss/" + str(self._epoch), loss)
+    tf.scalar_summary("NCE_loss/", loss)
     self._loss = loss
     self.optimize(loss)
 
@@ -418,7 +418,8 @@ class Word2Vec(object):
 
 
     summary_op = tf.merge_all_summaries()
-    summary_writer = tf.train.SummaryWriter(opts.result_path, self._session.graph)
+    summary_path = opts.result_path + "Epoch_" + str(self._epoch.eval())
+    summary_writer = tf.train.SummaryWriter(summary_path, self._session.graph)
 
 
     workers = []
@@ -580,7 +581,7 @@ class Word2Vec(object):
     #Return flag
     return flag
 
-  def avg_loss(self):
+  def avg_loss(self, writer):
     # Calculate and print the delta between avgloss
     newavg = sum(self._losslist) / len(self._losslist)
     delta = abs(newavg - self._avgloss)
@@ -589,6 +590,12 @@ class Word2Vec(object):
     print("\nDELTA =====================================>>> %s\n" %delta)
     self._avgloss = newavg
     self._losslist = []
+
+    step = self.global_step.eval()
+    deltaval = tf.Summary(value=[tf.Summary.Value(tag="DELTA_AVG_LOSS", simple_value=delta)])
+    writer.add_summary(deltaval, step)
+    avgval = tf.Summary(value=[tf.Summary.Value(tag="AVG_LOSS", simple_value=newavg)])
+    writer.add_summary(avgval, step)
 
     # tf.scalar_summary("Delta", delta)
     # tf.scalar_summary("Avgloss", newavg)
@@ -624,11 +631,11 @@ def main(_):
     sys.exit(1)
   opts = Options()
 
-  ## Dump env
-  dump_env(opts.save_path)
   ## Create save and result directories
   create_dir(FLAGS.save_path)
   create_dir(FLAGS.result_path)
+  ## Dump env
+  dump_env(opts.save_path)
 
   # my_config to be passed as argument in tf.session(config=my_config)
   my_config = tf.ConfigProto()
@@ -638,16 +645,19 @@ def main(_):
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
     model.dump_word2idx(opts.result_path)
-    # avg_loss_writer = tf.train.SummaryWriter(opts.result_path, model._session.graph)
+    avg_loss_writer = tf.train.SummaryWriter(opts.result_path + "Epoch", model._session.graph)
+
 
     while True:
     # for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
-      model.avg_loss()
+      model.avg_loss(avg_loss_writer)
 
-      if model.eval_converge():
-      #if model.delta_convergence(.01):
+      #if model.eval_converge():
+      if model.delta_convergence(.1):
         break
+
+    avg_loss_writer.close()
     # Perform a final save.
     model.saver.save(session,
                      os.path.join(opts.save_path, "model.ckpt"),

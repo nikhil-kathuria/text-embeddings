@@ -74,7 +74,7 @@ def extract(fname, corpus, out):
             continue
 
         ## Parse the html via boilerpipe
-        doc_html = si.body.body.clean_html
+        doc_html = si.body.clean_html
         extractor = Extractor(extractor='ArticleExtractor', html=doc_html)
         text = extractor.getText()
 
