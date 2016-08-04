@@ -173,12 +173,14 @@ class Word2Vec(object):
     self._avgloss = 0
     self._losslist = []
     self._dlist = [0] * 4
+    self._plist = [False] * 4
 
     self.build_graph()
     self.build_eval_graph()
     self.save_vocab()
-    self._evalwords = self.init_words()
+    self._evalwords, self._relwords = self.init_words()
     self._topk  = dict.fromkeys(self._evalwords, None)
+    self._writer = None
     # self._read_analogies()
 
 
@@ -387,7 +389,7 @@ class Word2Vec(object):
       self._word2id[w] = i
     true_logits, sampled_logits = self.forward(examples, labels)
     loss = self.nce_loss(true_logits, sampled_logits)
-    tf.scalar_summary("NCE_loss/", loss)
+    tf.scalar_summary("NCE_loss", loss)
     self._loss = loss
     self.optimize(loss)
 
@@ -541,12 +543,26 @@ class Word2Vec(object):
     fname = self._options.eval_data
     fobj = open(fname, 'r')
     words = []
+    relwords = []
     for line in fobj:
-      words.extend(line.split())
+      sparr = line.split()
+      words.append(sparr[0])
+      del sparr[0]
+      relwords.append(sparr)
     fobj.close()
 
-    ids = np.array([self._word2id.get(x, 0) for x in words if x in self._word2id])
-    return ids
+    ids = [self._word2id.get(x, -1) for x in words]
+    relsets = []
+    finalids = []
+
+    for idx, id in enumerate(ids):
+      if id == -1:
+        continue
+      relids = set([self._word2id.get(word) for word in relwords[idx] if word in self._word2id])
+      relsets.append(relids)
+      finalids.append(id)
+
+    return finalids, relsets
 
 
   def delta_convergence(self, tolerance):
@@ -556,10 +572,45 @@ class Word2Vec(object):
     return True
 
 
-  def eval_converge(self, num=20):
+  def ap_relwords(self, score):
+    for i in xrange(len(self._evalwords)):
+      word = self._id2word[self._evalwords[i]]
+      neigbhor = score[i]
+      relword = self._relwords[i]
+
+      rank, relret, ap = 0, 0 ,0
+      rel = len(relword)
+      for idx in neigbhor:
+        rank += 1
+        if idx in relword:
+          relret +=1
+          ap += float(relret) / rank
+
+        # Check we have encountered all relevant
+        if relret >= rel:
+          break
+
+      # Now add to summary
+      print("AP_" + word + " -> " + str(ap))
+      avgp = tf.Summary(value=[tf.Summary.Value(tag="AP_" + word, simple_value=ap)])
+      self._writer.add_summary(avgp, self._epoch.eval())
+
+  def check_convergence(self, num=20):
+    flag = self.eval_converge(num)
+    self._plist.append(flag)
+    del self._plist[0]
+    for val in self._plist:
+      if not val:
+        return False
+    return True
+
+
+  def eval_converge(self, num):
     flag = True
     vals, idx = self._session.run(
             [self._nearby_val, self._nearby_idx], {self._nearby_word: self._evalwords})
+    # Calculate the AP for relevant words
+    self.ap_relwords(idx)
 
     for i in xrange(len(self._evalwords)):
       word = self._id2word[self._evalwords[i]]
@@ -578,7 +629,6 @@ class Word2Vec(object):
       # Update the nearest neighbors
       self._topk[self._evalwords[i]] = new_neighbor
 
-    #Return flag
     return flag
 
   def avg_loss(self, writer):
@@ -645,20 +695,22 @@ def main(_):
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
     model.dump_word2idx(opts.result_path)
-    avg_loss_writer = tf.train.SummaryWriter(opts.result_path + "Epoch", model._session.graph)
+    model._writer = tf.train.SummaryWriter(opts.result_path + "Epoch", model._session.graph)
 
 
     while True:
     # for _ in xrange(opts.epochs_to_train):
       model.train()  # Process one epoch
-      model.avg_loss(avg_loss_writer)
+      model.avg_loss(model._writer)
 
+      if model.check_convergence():
       #if model.eval_converge():
-      if model.delta_convergence(.1):
+      #if model.delta_convergence(.1):
         break
 
-    avg_loss_writer.close()
-    # Perform a final save.
+
+    # Close writer and Perform a final save
+    model._writer.close()
     model.saver.save(session,
                      os.path.join(opts.save_path, "model.ckpt"),
                      global_step=model.global_step)
