@@ -172,7 +172,7 @@ class Word2Vec(object):
     self._id2word = []
     self._avgloss = 0
     self._losslist = []
-    self._dlist = [0] * 4
+    self._dlist = [1] * 4
     self._plist = [False] * 4
 
     self.build_graph()
@@ -525,13 +525,9 @@ class Word2Vec(object):
 
   def similar_neighbor(self, old, new, word):
     flag = True
-    # print(old)
-    # print(new)
     old_set = set(old)
     new_set = set(new)
     diff = old_set.symmetric_difference(new_set)
-    # print(old_set)
-    # print(new_set)
     if len(diff) > 0:
         print(word + " Did not converge")
         flag = False
@@ -567,7 +563,7 @@ class Word2Vec(object):
 
   def delta_convergence(self, tolerance):
     for itr in range(1, len(self._dlist)):
-      if abs(self._dlist[itr - 1] - self._dlist[itr]) > tolerance:
+      if abs(self._dlist[itr]) > tolerance:
         return False
     return True
 
@@ -703,9 +699,9 @@ def main(_):
       model.train()  # Process one epoch
       model.avg_loss(model._writer)
 
-      if model.check_convergence():
+      #if model.check_convergence():
       #if model.eval_converge():
-      #if model.delta_convergence(.1):
+      if model.delta_convergence(.001):
         break
 
 
