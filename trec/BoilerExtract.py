@@ -3,12 +3,12 @@ import json
 import os
 
 from Cleanse import *
-from boilerpipe.extract import Extractor
 from collections import Counter
+from boilerpipe.extract import Extractor
 import streamcorpus
 
-inpath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data"
-outpath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data"
+inpath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/"
+outpath = "/Users/nikhilk/Documents/NEU_MSCS/MLLAB/Text_Vectors/trec/data/27"
 
 
 def dump_tfmap(qmap, fname, idt):
@@ -30,6 +30,11 @@ def updatemap(qmap, words, docno):
         else:
             qmap[key] = update
 
+
+def clean(text):
+    text = text.replace('\n', ' ').replace('\r', ' ').lower()
+    text = (puncleft(puncright(onlyenglish(text))))
+    return text
 
 
 def writeStat(stats, out):
@@ -78,17 +83,14 @@ def extract(fname, corpus, out):
         extractor = Extractor(extractor='ArticleExtractor', html=doc_html)
         text = extractor.getText()
 
-
-        # Clean and update the term frequency map
-        text = (onlyenglish(puncleft(puncright(text))))
-        text = text.replace('\n', ' ').replace('\r', ' ').lower()
+        # Clean Text
+        text = clean(text)
 
         words = text.split()
         wcount += len(words)
 
         updatemap(qmap, words, docno)
-        doctext = " ".join(words)
-
+        doctext = " ".join(words) + " "
 
         fobj.write(doctext)
 

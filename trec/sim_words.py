@@ -50,9 +50,13 @@ def multiple_words(wsplit, finalset, termset):
 
 
 def findwords(term):
-    finalset = set()
     termset = set(termdict.keys())
+    if term not in termset:
+        return
+
+    finalset = set()
     wordset = apicall(term)
+    print(wordset)
 
     for words in wordset:
         wsplit = words.split()
@@ -79,5 +83,5 @@ def checkargs():
 
 
 if __name__ == '__main__':
-    #checkargs()
-    findwords('rain')
+    checkargs()
+    #findwords('crash')

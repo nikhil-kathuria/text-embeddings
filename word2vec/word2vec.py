@@ -305,6 +305,7 @@ class Word2Vec(object):
     words_to_train = float(opts.words_per_epoch * opts.epochs_to_train)
     lr = opts.learning_rate * tf.maximum(
         0.0001, 1.0 - tf.cast(self._words, tf.float32) / words_to_train)
+    lr = tf.maximum(0.0001, lr)
     self._lr = lr
     tf.scalar_summary("Learning_Rate", lr)
     optimizer = tf.train.GradientDescentOptimizer(lr)
@@ -701,7 +702,7 @@ def main(_):
 
       #if model.check_convergence():
       #if model.eval_converge():
-      if model.delta_convergence(.001):
+      if model.delta_convergence(.01):
         break
 
 

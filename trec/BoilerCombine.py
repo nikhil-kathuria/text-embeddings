@@ -1,6 +1,6 @@
 import streamcorpus
 from Cleanse import *
-from BoilerExtract import updatemap, dump_dfmap, dump_tfmap, writeStat
+from BoilerExtract import updatemap, dump_dfmap, dump_tfmap, writeStat, clean
 from boilerpipe.extract import Extractor
 from glob import glob
 import os
@@ -44,15 +44,13 @@ def extract(fobj, corpus, qmap):
 
 
         # Clean and update the term frequency map
-        text = (onlyenglish(puncleft(puncright(text))))
-        text = text.replace('\n', ' ').replace('\r', ' ').lower()
+        text = clean(text)
 
         words = text.split()
         wcount += len(words)
 
         updatemap(qmap, words, docno)
-        doctext = " ".join(words)
-
+        doctext = " ".join(words) + " "
 
         fobj.write(doctext)
 
