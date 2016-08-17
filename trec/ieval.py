@@ -3,6 +3,7 @@ import numpy as np
 import sys
 from scipy.spatial.distance import cosine, cdist
 from gensim.models import Word2Vec
+
 from colorama import Fore, Back, Style
 from IPython import embed
 
@@ -109,13 +110,14 @@ def compare(word, dis_type='cosine', topk=100):
     mymap = {}
 
     for itr in range(topn):
-        gmap[str(gsim[itr][0])] = gsim[itr][1]
+        gword = str(gsim[itr][0].encode('ascii', 'replace'))
+        gmap[gword] = gsim[itr][1]
         mymap[str(idx2word[mysim[itr][0]])] = mysim[itr][1]
 
 
 
     for itr in range(topn):
-        gword = str(gsim[itr][0])
+        gword = str(gsim[itr][0].encode('ascii', 'replace'))
         mword = str(idx2word[mysim[itr][0]])
 
         if gword in mymap:
@@ -133,8 +135,8 @@ def compare(word, dis_type='cosine', topk=100):
         part2 = '{:>50}'.format(part2)
         print(part1 + "||" + part2)
 
-    Style.RESET_ALL
-    print("")
+
+    print(Style.RESET_ALL)
 
 if __name__ == '__main__':
     embed()
