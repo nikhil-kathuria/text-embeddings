@@ -10,10 +10,10 @@ import tensorflow as tf
 
 flags = tf.app.flags
 flags.DEFINE_string("data_path", "data/", "Directory containing tha data")
-flags.DEFINE_string("learning_rate", ".005", "Learning rate for the optimizer")
-flags.DEFINE_string("l1_features", "600", "Number of Units in hidden layer")
-flags.DEFINE_string("h1_units", "600", "Number of Units in hidden layer")
-flags.DEFINE_string("num_class", "10", "Number of distinct classes")
+flags.DEFINE_float("learning_rate", ".005", "Learning rate for the optimizer")
+flags.DEFINE_integer("l1_features", "600", "Number of Units in hidden layer")
+flags.DEFINE_integer("h1_units", "600", "Number of Units in hidden layer")
+flags.DEFINE_integer("num_class", "10", "Number of distinct classes")
 flags.DEFINE_string("save_path", ".", "Path to save model components")
 flags.DEFINE_string("result_path", ".", "Path to for model results")
 FLAGS = flags.FLAGS
@@ -24,9 +24,8 @@ class Params:
         # Assign option values
         self.data_path = FLAGS.data_path
         self.learning_rate = FLAGS.learning_rate
-        self.l1_features = int(FLAGS.l1_features)
-        self.h1_units = int(FLAGS.h1_units)
-        self.num_class = int(FLAGS.num_class)
+        self.h1_units = FLAGS.h1_units
+        self.num_class = FLAGS.num_class
         self.save_path = FLAGS.save_path
         self.result_path = FLAGS.result_path
 
@@ -40,29 +39,34 @@ class Params:
 
     def loadmat(self, fname):
         fpath = self.data_path + fname
-        labels = []
-        mat = []
-
-        fobj = open(fpath, 'r')
-
-        for line in fobj:
+        with open(fpath, 'r') as fobj:
+            labels = []
+            line = fobj.readline()
             arr = line.split()
             last = arr[len(arr) -1].split(":")[0]
             length = int(last) + 1
-            row = np.zeros(length)
-            labels.append(arr[0].split(','))
-            #del arr[0]
 
+            ## Start with 1, since we have read first line
+            row = 1
+            for line in fobj:
+                row +=1
+
+
+        mat = np.zeros((row, length), dtype=float)
+
+        row = 0
+        for line in open(fpath, 'r'):
+            arr = line.split()
+            labels.append(arr[0].split(','))
             for col in range(1, len(arr)):
                 tup = arr[col].split(":")
                 #try:
-                row[int(tup[0])] = float(tup[1])
+                mat[row][int(tup[0])] = float(tup[1])
                     # print(str(tup[0]) + " " + str(tup[1]))
                 #except:
                     #print(str(tup[0]) + " " + str(tup[1]))
                     #exit()
-
-            mat.append(row)
+            row += 1
         fobj.close()
         return mat, labels
 
@@ -72,7 +76,7 @@ class MultiNN:
         self.params = params
         self.build_graph()
         self.losslist = list()
-        tf.initialize_all_variables()
+        tf.initialize_all_variables().run()
 
     def forward_pass(self):
         ## Input Layer and Labels
@@ -98,14 +102,14 @@ class MultiNN:
 
         tf.scalar_summary("Cross_Entropy_Loss", self.loss)
 
-        self.train = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(self.loss)
+        self.train = tf.train.AdamOptimizer(self.params.learning_rate).minimize(self.loss)
 
         self.saver = tf.train.Saver()
 
 
     def encodeLabels(self, multi):
         rows = len(multi)
-        labels = np.zeros((rows, self.params.num_class))
+        labels = np.zeros((rows, self.params.num_class), dtype=float)
 
         for row in range(rows):
             for col in multi[row]:
@@ -128,11 +132,13 @@ def run():
 
         while(itr < 1000):
             itr += 1
+            labels = mnn.encodeLabels(params._label_train)
             _, loss = session.run([mnn.train, mnn.loss],
                                   feed_dict={mnn.x : params._train,
-                                             mnn.y : mnn.encodeLabels(params._label_train)})
+                                             mnn.y : labels})
             mnn.losslist.append(loss)
             #print("Loss at iteration " + str(itr) + " " + str(loss))
+            #print(loss)
 
 
         mnn.saver.save(session,
