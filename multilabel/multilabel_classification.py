@@ -10,7 +10,8 @@ import tensorflow as tf
 
 flags = tf.app.flags
 flags.DEFINE_string("data_path", "data/", "Directory containing tha data")
-flags.DEFINE_float("learning_rate", ".005", "Learning rate for the optimizer")
+flags.DEFINE_float("learning_rate", ".001", "Learning rate for the optimizer")
+flags.DEFINE_float("threshold", ".5", "Threshold above which is considered predicted")
 flags.DEFINE_integer("l1_features", "600", "Number of Units in hidden layer")
 flags.DEFINE_integer("h1_units", "600", "Number of Units in hidden layer")
 flags.DEFINE_integer("num_class", "10", "Number of distinct classes")
@@ -60,12 +61,7 @@ class Params:
             labels.append(arr[0].split(','))
             for col in range(1, len(arr)):
                 tup = arr[col].split(":")
-                #try:
                 mat[row][int(tup[0])] = float(tup[1])
-                    # print(str(tup[0]) + " " + str(tup[1]))
-                #except:
-                    #print(str(tup[0]) + " " + str(tup[1]))
-                    #exit()
             row += 1
         fobj.close()
         return mat, labels
@@ -92,6 +88,7 @@ class MultiNN:
         W_out = tf.Variable(tf.random_normal([self.params.h1_units, self.params.num_class]))
         b_out = tf.Variable(tf.random_normal([self.params.num_class]))
         self.y_ = tf.nn.softmax(tf.matmul(h1, W_out) + b_out)
+        #self.y_ = tf.nn.sigmoid(tf.matmul(h1, W_out) + b_out)
 
 
 
@@ -99,10 +96,11 @@ class MultiNN:
     def build_graph(self):
         self.forward_pass()
         self.loss = tf.nn.sigmoid_cross_entropy_with_logits(self.y, self.y_, name="loss_func")
+        #self.loss = tf.nn.softmax_cross_entropy_with_logits(self.y, self.y_, name="loss_func")
 
         tf.scalar_summary("Cross_Entropy_Loss", self.loss)
 
-        self.train = tf.train.AdamOptimizer(self.params.learning_rate).minimize(self.loss)
+        self.train = tf.train.AdagradOptimizer(self.params.learning_rate).minimize(self.loss)
 
         self.saver = tf.train.Saver()
 
@@ -116,6 +114,38 @@ class MultiNN:
                 labels[row][int(col)] = 1
 
         return labels
+
+
+    def accThreshold(self, result, labels):
+        hit = 0
+        for row in range(result.shape[0]):
+            flag = True
+            for col in range(result.shape[1]):
+                if result[row][col] >= FLAGS.threshold:
+                    if labels[row][col] != 1:
+                        flag = False
+                        continue
+            if flag:
+                hit +=1
+        print (float(hit) / result.shape[0] * 100)
+
+
+
+    def results(self, session, mat, labels):
+        predict = session.run(self.y_, feed_dict={self.x : mat})
+        self.accThreshold(predict , labels)
+        return predict
+
+    def loss_convergence(self, patience, tolerance):
+        length = len(self.losslist)
+        if length <= patience:
+            return False
+
+        for itr in range(length - patience, length):
+            if abs(self.losslist[itr - 1] - self.losslist[itr]) >= tolerance:
+                return False
+
+        return True
 
 
 def run():
@@ -132,18 +162,31 @@ def run():
 
         while(itr < 1000):
             itr += 1
-            labels = mnn.encodeLabels(params._label_train)
+            train_labels = mnn.encodeLabels(params._label_train)
+            test_labels = mnn.encodeLabels(params._label_test)
             _, loss = session.run([mnn.train, mnn.loss],
                                   feed_dict={mnn.x : params._train,
-                                             mnn.y : labels})
+                                             mnn.y : train_labels})
+            sum_loss = np.sum(loss)
+            print("Sum Loss at iteration " + str(itr) + " " + str(loss))
             mnn.losslist.append(loss)
-            #print("Loss at iteration " + str(itr) + " " + str(loss))
-            #print(loss)
 
 
-        mnn.saver.save(session,
-                       os.path.join(params.save_path, "model.ckpt"),
-                       global_step=itr)
+        print("Test Accuracy")
+        predict = mnn.results(session, mnn.params._test, test_labels)
+        np.savetxt(os.path.join(mnn.params.result_path, 'test.txt'), predict, fmt='%10.8f')
+
+        print("Train Accuracy")
+        predict = mnn.results(session, mnn.params._train, train_labels)
+        np.savetxt(os.path.join(mnn.params.result_path, 'train.txt'), predict, fmt='%10.8f')
+
+
+
+        # mnn.saver.save(session,
+        #                os.path.join(params.save_path, "model.ckpt"),
+        #                global_step=itr)
+
+
 
 
 
