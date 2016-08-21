@@ -15,18 +15,14 @@ scount = 0
 wcount = 0
 
 # Gensim Bigram thresholds
-bigram_mincount = 5
-bigram_threshold = 2
-
-# The list for all doc's text
-dtext = []
+bigram_mincount = 10
+bigram_threshold = 5
 
 
-def extract(pobj, corpus, qmap):
+def extract(dmap, pobj, fobj, corpus):
     global dcount
     global scount
     global wcount
-    global dtext
 
     for si in streamcorpus.Chunk(path=corpus):
         docno = si.doc_id
@@ -53,45 +49,53 @@ def extract(pobj, corpus, qmap):
         # Clean and update the term frequency map
         text = clean(text)
 
+        # Write to doc tex map file
+        fobj.write(corpus + "{|}" + docno + "{|}" + text)
+
         words = text.split()
         wcount += len(words)
 
-        updatemap(qmap, words, docno)
-
         # Append final doc and update vocab for bigram filtering
         pobj.add_vocab([words])
-        dtext.append(words)
-
-
+        dmap[docno] = words
 
 
 def read():
     qmap = dict()
+    dmap = dict()
     pobj  = Phrases(min_count=bigram_mincount, threshold=bigram_threshold, delimiter='-')
 
     if not os.path.isdir(outpath):
         os.makedirs(outpath)
 
+    fobj = open(outpath + "/" + "dmap.txt", 'w')
 
+    # Iterate over all the files
     for filename in glob(inpath + '/*'):
 
         print("Processing -> " + filename)
-        extract(pobj, filename, qmap)
+        extract(dmap, pobj, fobj, filename)
 
+    fobj.close()
+
+    # Now write to file
+    fobj = open(outpath + "/" + "data.txt", 'w')
+    for key in dmap:
+        words = pobj[dmap[key]]
+        updatemap(qmap, words , key)
+        doctext = " ".join(words) + " "
+        fobj.write(doctext)
+    fobj.close()
+
+
+    ## Write TF and DF Map
     tf_file = outpath + "/" + "TFmap.json"
     df_file = outpath + "/" + "DFmap.json"
     dump_tfmap(qmap, tf_file, 2)
     dump_dfmap(qmap, df_file)
 
-    # Now write to file via
-    fobj = open(outpath + "/" + "data.txt", 'w')
-    for line in dtext:
-        dlist = pobj[line]
-        doctext = " ".join(dlist) + " "
-        fobj.write(doctext)
-    fobj.close()
+    ## Write Stats to file
     writeStat((wcount, scount, dcount), outpath)
-
 
 
 if __name__ == '__main__':
