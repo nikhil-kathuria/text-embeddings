@@ -12,9 +12,7 @@ flags = tf.app.flags
 flags.DEFINE_string("data_path", "data/", "Directory containing tha data")
 flags.DEFINE_float("learning_rate", ".001", "Learning rate for the optimizer")
 flags.DEFINE_float("threshold", ".5", "Threshold above which is considered predicted")
-flags.DEFINE_integer("l1_features", "600", "Number of Units in hidden layer")
 flags.DEFINE_integer("h1_units", "600", "Number of Units in hidden layer")
-flags.DEFINE_integer("num_class", "10", "Number of distinct classes")
 flags.DEFINE_string("save_path", ".", "Path to save model components")
 flags.DEFINE_string("result_path", ".", "Path to for model results")
 FLAGS = flags.FLAGS
@@ -26,7 +24,6 @@ class Params:
         self.data_path = FLAGS.data_path
         self.learning_rate = FLAGS.learning_rate
         self.h1_units = FLAGS.h1_units
-        self.num_class = FLAGS.num_class
         self.save_path = FLAGS.save_path
         self.result_path = FLAGS.result_path
 
@@ -34,11 +31,13 @@ class Params:
         self._train, self._label_train = self.loadmat('train.txt')
         self._test, self._label_test = self.loadmat('test.txt')
 
-        # Replace the num features with actual features from data
+        # Replace the num features and num labels with actual features/labels from data
         self.l1_features = len(self._train[0])
+        self.num_class = len(self.lset)
 
 
     def loadmat(self, fname):
+        self.lset = set()
         fpath = self.data_path + fname
         with open(fpath, 'r') as fobj:
             labels = []
@@ -58,7 +57,9 @@ class Params:
         row = 0
         for line in open(fpath, 'r'):
             arr = line.split()
-            labels.append(arr[0].split(','))
+            label = arr[0].split(',')
+            labels.append(label)
+            self.lset = self.lset.union(label)
             for col in range(1, len(arr)):
                 tup = arr[col].split(":")
                 mat[row][int(tup[0])] = float(tup[1])
@@ -82,13 +83,16 @@ class MultiNN:
         ## Hidden Layer
         W_h1 = tf.Variable(tf.random_normal([self.params.l1_features, self.params.h1_units]))
         b_1 = tf.Variable(tf.random_normal([self.params.h1_units]))
-        h1 = tf.nn.sigmoid(tf.matmul(self.x, W_h1) + b_1)
+
+        ## Activation functions for hidden layer
+        h1 = tf.nn.relu(tf.matmul(self.x, W_h1) + b_1)
+        #h1 = tf.nn.sigmoid(tf.matmul(self.x, W_h1) + b_1)
 
         ## Output Layer
         W_out = tf.Variable(tf.random_normal([self.params.h1_units, self.params.num_class]))
         b_out = tf.Variable(tf.random_normal([self.params.num_class]))
-        self.y_ = tf.nn.softmax(tf.matmul(h1, W_out) + b_out)
-        #self.y_ = tf.nn.sigmoid(tf.matmul(h1, W_out) + b_out)
+        #self.y_ = tf.nn.softmax(tf.matmul(h1, W_out) + b_out)
+        self.y_ = tf.nn.sigmoid(tf.matmul(h1, W_out) + b_out)
 
 
 
@@ -100,7 +104,9 @@ class MultiNN:
 
         tf.scalar_summary("Cross_Entropy_Loss", self.loss)
 
+        # The optimizer for probalem
         self.train = tf.train.AdagradOptimizer(self.params.learning_rate).minimize(self.loss)
+        #self.train = tf.train.AdamOptimizer(self.params.learning_rate).minimize(self.loss)
 
         self.saver = tf.train.Saver()
 
@@ -168,8 +174,8 @@ def run():
                                   feed_dict={mnn.x : params._train,
                                              mnn.y : train_labels})
             sum_loss = np.sum(loss)
-            print("Sum Loss at iteration " + str(itr) + " " + str(loss))
-            mnn.losslist.append(loss)
+            print("Sum Loss at iteration " + str(itr) + " " + str(sum_loss))
+            mnn.losslist.append(sum_loss)
 
 
         print("Test Accuracy")
