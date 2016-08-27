@@ -44,6 +44,9 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 
 import numpy as np
 import tensorflow as tf
+from gensim.models import Word2Vec as GWord2Vev
+from gensim.models.word2vec import Vocab as GVocab
+
 
 from tensorflow.models.embedding import gen_word2vec as word2vec
 
@@ -402,7 +405,7 @@ class Word2Vec(object):
   def save_vocab(self):
     """Save the vocabulary to a file so the model can be reloaded."""
     opts = self._options
-    with open(os.path.join(opts.save_path, "vocab.txt"), "w") as f:
+    with open(os.path.join(opts.result_path, "vocab.txt"), "w") as f:
       for i in xrange(opts.vocab_size):
         f.write("%s %d\n" % (tf.compat.as_text(opts.vocab_words[i]),
                              opts.vocab_counts[i]))
@@ -421,7 +424,7 @@ class Word2Vec(object):
 
 
     summary_op = tf.merge_all_summaries()
-    summary_path = opts.result_path + "Epoch_" + str(self._epoch.eval())
+    summary_path = opts.save_path + "Epoch_" + str(self._epoch.eval())
     summary_writer = tf.train.SummaryWriter(summary_path, self._session.graph)
 
 
@@ -650,6 +653,22 @@ class Word2Vec(object):
     # avg_loss_writer.add_summary(newavg_str, model.global_step.eval())
 
 
+  def save_gensim_format(self, embeddings,out_embeddings):
+    opts = self._options
+    genw2v = GWord2Vev(size=opts.emb_dim)
+    genw2v.syn0 = embeddings
+    for idx in xrange(opts.vocab_size):
+      word = opts.vocab_words[idx]
+      ## Since vocab_words are sorted descending by count we can use idx as index directly
+      ## instead of lookup for index of word from self.word2idx
+      genw2v.vocab[word] = GVocab(count=opts.vocab_counts[idx], index=idx)
+
+    # Now save the out and in embeddings
+    genw2v.save_word2vec_format(os.path.join(opts.save_path, "genEmbeddings_in.bin"), binary=False)
+    genw2v.syn0 = out_embeddings
+    genw2v.save_word2vec_format(os.path.join(opts.save_path, "genEmbeddings_out.bin"), binary=False)
+
+
 def _start_shell(local_ns=None):
   # An interactive shell is useful for debugging/development.
   import IPython
@@ -669,6 +688,7 @@ def dump_env(path):
 def create_dir(dirpath):
   if not os.path.isdir(dirpath):
     os.makedirs(dirpath)
+
 
 def main(_):
   start = timeit.default_timer()
@@ -692,7 +712,7 @@ def main(_):
   with tf.Graph().as_default(), tf.Session(config=my_config) as session:
     model = Word2Vec(opts, session)
     model.dump_word2idx(opts.result_path)
-    model._writer = tf.train.SummaryWriter(opts.result_path + "Epoch", model._session.graph)
+    model._writer = tf.train.SummaryWriter(opts.save_path + "Epoch", model._session.graph)
 
 
     while True:
@@ -700,11 +720,9 @@ def main(_):
       model.train()  # Process one epoch
       model.avg_loss(model._writer)
 
-      #if model.check_convergence():
-      #if model.eval_converge():
-      if model.delta_convergence(.01):
+      if model.check_convergence():
+      #if model.delta_convergence(.1):
         break
-
 
     # Close writer and Perform a final save
     model._writer.close()
@@ -712,10 +730,19 @@ def main(_):
                      os.path.join(opts.save_path, "model.ckpt"),
                      global_step=model.global_step)
 
+
     embeddings = model._emb.eval()
     out_embeddings = model._sm_w_t.eval()
+
+    # Dump in GenSim format
+    model.save_gensim_format(embeddings, out_embeddings)
+
+    # Dump in simple text format
     dump_embed(embeddings, "embeddings.txt", opts.result_path)
     dump_embed(out_embeddings, "out_embeddings.txt", opts.result_path)
+
+
+
     end = timeit.default_timer()
     print("Total time " + str((end - start) / 60) + " mins")
     if FLAGS.interactive:
